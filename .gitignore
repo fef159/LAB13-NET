@@ -1,0 +1,6 @@
+bin/
+obj/
+.vs/
+*.user
+Veterinaria.Api/appsettings.Development.json
+~$*
