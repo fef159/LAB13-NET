@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Veterinaria.Entidades.Dtos;
 using Veterinaria.Negocio.Excepciones;
@@ -7,18 +8,21 @@ namespace Veterinaria.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class MascotasController : ControllerBase
 {
     private readonly IMascotaServicio _servicio;
 
     public MascotasController(IMascotaServicio servicio) => _servicio = servicio;
 
+    [AllowAnonymous]
     // GET api/mascotas?especie=Perro&edadMinima=1&edadMaxima=5
     [HttpGet]
     public async Task<ActionResult<List<MascotaDto>>> Get(
         [FromQuery] string? especie, [FromQuery] int? edadMinima, [FromQuery] int? edadMaxima) =>
         Ok(await _servicio.ObtenerTodasAsync(especie, edadMinima, edadMaxima));
 
+    [AllowAnonymous]
     [HttpGet("{id:int}")]
     public async Task<ActionResult<MascotaDto>> GetPorId(int id)
     {
@@ -26,6 +30,7 @@ public class MascotasController : ControllerBase
         return dto is null ? NotFound() : Ok(dto);
     }
 
+    [Authorize(Roles = "Recepcionista,Veterinario")]
     [HttpPost]
     public async Task<ActionResult<MascotaDto>> Post(MascotaCrearDto dto)
     {
@@ -40,6 +45,7 @@ public class MascotasController : ControllerBase
         }
     }
 
+    [Authorize(Roles = "Veterinario")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Put(int id, MascotaActualizarDto dto)
     {
@@ -53,6 +59,7 @@ public class MascotasController : ControllerBase
         }
     }
 
+    [Authorize(Roles = "Veterinario")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id) =>
         await _servicio.EliminarAsync(id) ? NoContent() : NotFound();

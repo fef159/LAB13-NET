@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Veterinaria.Entidades.Dtos;
 using Veterinaria.Negocio.Excepciones;
@@ -7,6 +8,7 @@ namespace Veterinaria.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class PropietariosController : ControllerBase
 {
     private readonly IPropietarioServicio _servicio;
@@ -37,6 +39,7 @@ public class PropietariosController : ControllerBase
         return lista is null ? NotFound() : Ok(lista);
     }
 
+    [Authorize(Roles = "Recepcionista,Veterinario")]
     [HttpPost]
     public async Task<ActionResult<PropietarioDto>> Post(PropietarioCrearDto dto)
     {
@@ -51,10 +54,12 @@ public class PropietariosController : ControllerBase
         }
     }
 
+    [Authorize(Roles = "Recepcionista,Veterinario")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Put(int id, PropietarioActualizarDto dto) =>
         await _servicio.ActualizarAsync(id, dto) ? NoContent() : NotFound();
 
+    [Authorize(Roles = "Veterinario")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
