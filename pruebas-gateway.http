@@ -1,0 +1,77 @@
+# Pruebas por el gateway (Visual Studio o la extensión REST Client de VS Code).
+# En la nube cambia @gateway y @citas por las direcciones públicas.
+@gateway = http://localhost:5000
+@citas = http://localhost:5056
+# Usuarios de prueba de Scripts/Usuarios.sql: completa la clave antes de enviar
+@clave = escribe-la-clave-de-prueba
+
+### 200 - Login Recepcionista
+# @name recep
+POST {{gateway}}/gateway/auth/login
+Content-Type: application/json
+
+{ "correo": "recepcion@vet.com", "clave": "{{clave}}" }
+
+### 200 - Login Veterinario
+# @name vet
+POST {{gateway}}/gateway/auth/login
+Content-Type: application/json
+
+{ "correo": "veterinario@vet.com", "clave": "{{clave}}" }
+
+### 200 - GET público
+GET {{gateway}}/gateway/mascotas?especie=Perro
+
+### 200 - Perfil
+GET {{gateway}}/gateway/auth/perfil
+Authorization: Bearer {{recep.response.body.$.token}}
+
+### 200 - Lista de citas (microservicio 2)
+GET {{gateway}}/gateway/citas
+Authorization: Bearer {{recep.response.body.$.token}}
+
+### 200 - Cita por id
+GET {{gateway}}/gateway/citas/1
+Authorization: Bearer {{vet.response.body.$.token}}
+
+### 201 - Registro (cambia el correo si ya existe)
+POST {{gateway}}/gateway/auth/registro
+Content-Type: application/json
+
+{ "correo": "nuevo@vet.com", "clave": "{{clave}}" }
+
+### 201 - Alta de propietario (cambia el documento si ya existe)
+# @name alta
+POST {{gateway}}/gateway/propietarios
+Authorization: Bearer {{recep.response.body.$.token}}
+Content-Type: application/json
+
+{ "nombre": "Ana Torres", "documento": "S15-00002", "telefono": "7777-4444", "email": "ana@mail.com" }
+
+### 204 - Actualizar el propietario creado
+PUT {{gateway}}/gateway/propietarios/{{alta.response.body.$.id}}
+Authorization: Bearer {{recep.response.body.$.token}}
+Content-Type: application/json
+
+{ "nombre": "Ana Torres Ruiz", "telefono": "7777-5555", "email": "ana@mail.com" }
+
+### 204 - Eliminar el propietario creado (solo Veterinario)
+DELETE {{gateway}}/gateway/propietarios/{{alta.response.body.$.id}}
+Authorization: Bearer {{vet.response.body.$.token}}
+
+### 401 - Sin token (lo rechaza el gateway)
+GET {{gateway}}/gateway/citas
+
+### 401 - Directo al microservicio 2 sin token
+GET {{citas}}/api/citas
+
+### 403 - Recepcionista no puede eliminar
+DELETE {{gateway}}/gateway/propietarios/1
+Authorization: Bearer {{recep.response.body.$.token}}
+
+### 404 - Mascota inexistente
+GET {{gateway}}/gateway/mascotas/999
+
+### 502 - Detén CitasApi y envía esta petición
+GET {{gateway}}/gateway/citas
+Authorization: Bearer {{recep.response.body.$.token}}

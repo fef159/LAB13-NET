@@ -2,7 +2,8 @@ bin/
 obj/
 .vs/
 *.user
-Veterinaria.Api/appsettings.Development.json
+**/appsettings.Development.json
+**/appsettings.Production.json
 ~$*
 GLAB-S13-EAREVALO-2026-2.docx
 GLAB-S13-EAREVALO-2026-2-FINAL.docx
