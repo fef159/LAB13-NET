@@ -1,54 +1,105 @@
-# Despliegue en la nube (Semana 15)
+# Despliegue en Azure (Semana 15)
 
-| Pieza | Proveedor (plan gratuito) | Motivo |
-|---|---|---|
-| API de la S14 + base de datos | MonsterASP.NET (1 sitio + 1 base SQL Server) | Admite .NET 10 y SQL Server: no hay que cambiar el proveedor de EF Core |
-| CitasApi (microservicio 2) | Render (Web Service, Docker) | Se publica desde el repositorio de GitHub |
-| GatewayApi | Render (Web Service, Docker) | Igual que CitasApi |
+| Pieza | Servicio de Azure (plan gratuito) |
+|---|---|
+| GatewayApi, Veterinaria.Api y CitasApi | App Service, plan F1 (Windows), una aplicación web por proyecto |
+| Base de datos | Azure SQL Database, oferta gratuita (serverless) |
 
-Antes de empezar revisa las condiciones vigentes de cada plan. En Render el servicio gratuito se
-duerme tras 15 minutos sin tráfico y el primer request tarda alrededor de un minuto.
+Motivo: un solo proveedor y SQL Server, así no se cambia el proveedor de EF Core ni la lógica
+de la API. Revisa las condiciones vigentes: F1 tiene una cuota diaria de CPU (60 minutos) y la
+base gratuita un límite mensual (100 000 segundos de vCore).
 
-## 1. Base de datos y API (MonsterASP.NET)
+## 1. Preparación (una sola vez)
 
-1. Crea la cuenta, un sitio web gratuito y una base de datos MSSQL.
-2. Ejecuta `Scripts/VeterinariaDB_nube.sql` sobre esa base (desde SSMS o el editor del panel).
-3. En `Veterinaria.Api` crea `appsettings.Production.json` (está en `.gitignore`):
+1. Ten una suscripción de Azure activa. En este laboratorio se usó una prueba gratuita; también
+   sirve [Azure for Students](https://azure.microsoft.com/free/students/).
+2. Instala Azure CLI y abre una terminal nueva:
 
-```json
-{
-  "ConnectionStrings": { "VeterinariaDb": "<cadena de conexión que entrega el panel>" },
-  "Jwt": { "Key": "<clave nueva de 32 caracteres o más>" }
-}
+   ```powershell
+   winget install --exact --id Microsoft.AzureCLI
+   ```
+
+3. Inicia sesión (se abre el navegador):
+
+   ```powershell
+   az login
+   ```
+
+4. Elige una región que tu suscripción permita y que tenga cuota para el plan F1. Si hay
+   restricciones, aparecen en el portal: Policy → Assignments → "Allowed resource deployment
+   regions".
+
+## 2. Publicar todo
+
+Desde la carpeta de la solución, con un sufijo propio (3 a 12 letras minúsculas o números)
+para que los nombres sean únicos:
+
+```powershell
+.\Scripts\desplegar-azure.ps1 -Sufijo TUSUFIJO -Region TUREGION
 ```
 
-4. Publica el proyecto `Veterinaria.Api` (en Visual Studio: Publicar → Web Deploy, con el perfil
-   que descargas del panel). `appsettings.Development.json` no se usa en producción: no hace falta subirlo.
-5. Comprueba `https://<tu-api>.runasp.net/api/mascotas`.
+Si la suscripción ya tiene otra base gratuita, la nueva puede tener que ir en la misma región.
+Indícala con `-RegionSql`. El despliegue de este laboratorio fue:
 
-## 2. Repositorio
+```powershell
+.\Scripts\desplegar-azure.ps1 -Sufijo s15k7q -Region westus3 -RegionSql swedencentral
+```
 
-Sube la rama a GitHub. Comprueba que no aparezcan `appsettings.Development.json` ni
-`appsettings.Production.json`.
+El script pide confirmación y una contraseña nueva para el administrador SQL, y luego:
 
-## 3. CitasApi (Render)
+1. Crea el grupo `rg-veterinaria-s15`, el plan F1 y las tres aplicaciones web.
+2. Crea el servidor SQL y la base gratuita (se pausa al agotar el límite) y ejecuta
+   `Scripts/VeterinariaDB_nube.sql`.
+3. Genera una clave JWT nueva y la configura, igual, en las tres aplicaciones. La cadena de
+   conexión queda como configuración de la API. Ninguna se guarda en el repositorio.
+4. Escribe los hosts reales en `GatewayApi/ocelot.Production.json`.
+5. Publica los tres proyectos y comprueba que responden.
 
-1. New → Web Service → elige el repositorio y la rama.
-2. Root Directory: `CitasApi`. Runtime: Docker. Plan: Free.
-3. Variable de entorno `Jwt__Key`: la misma clave que usa la API.
-4. Comprueba que `https://<citas>.onrender.com/api/citas` responde 401.
+Si falla a la mitad, corrige la causa y vuelve a ejecutarlo con el mismo sufijo.
 
-## 4. GatewayApi (Render)
+Errores frecuentes:
 
-1. Edita `GatewayApi/ocelot.Production.json`: reemplaza `REEMPLAZAR-API.runasp.net`,
-   `REEMPLAZAR-CITAS.onrender.com` y `REEMPLAZAR-GATEWAY.onrender.com` por los hosts reales. Haz commit y push.
-2. New → Web Service. Root Directory: `GatewayApi`. Runtime: Docker. Plan: Free.
-3. Variable de entorno `Jwt__Key`: la misma clave.
-4. Si Render asigna al gateway un host distinto del previsto, corrige `BaseUrl` y vuelve a subir.
+- **Región no permitida** o sin capacidad: usa otra de la lista de tu suscripción.
+- **"Current Limit (F1 App Service instances): 0":** esa región no tiene cuota para el plan
+  gratuito; prueba otra. En la prueba gratuita usada para este laboratorio funcionó `westus3`.
+- **`InternalServerError` al crear la base:** en este laboratorio ocurrió en `westus3`; se
+  resolvió creando la base en la región de la otra base gratuita (`-RegionSql swedencentral`).
+- **Nombre en uso:** cambia el sufijo.
+- **500 en el primer request:** la base puede estar reanudándose; espera un minuto y repite.
 
-## 5. Pruebas en la nube
+## 3. Después de publicar
 
-En `pruebas-gateway.http` cambia `@gateway` y `@citas` por las direcciones públicas y repite
-200, 201, 204, 401, 403, 404 y 502. Para el 502, suspende el servicio CitasApi en Render y, al
-terminar, reactívalo. Si el proveedor responde con otro código para un servicio suspendido,
-anótalo tal como salga.
+Haz commit y push de `GatewayApi/ocelot.Production.json`.
+
+Los usuarios de prueba del script SQL tienen una clave que está en el repositorio. Es aceptable
+para el laboratorio; elimina los recursos cuando ya esté calificado.
+
+## 4. Pruebas en la nube
+
+En `pruebas-gateway.http` cambia `@gateway` y `@citas` por las direcciones `https://...` y repite
+200, 201, 204, 401, 403 y 404.
+
+**502:** al detener una aplicación en App Service, Azure responde 403 por ella, así que el gateway
+no devolvería 502. Para provocarlo, apunta temporalmente la ruta de citas (índice 6) a un host
+que no existe:
+
+```powershell
+az webapp config appsettings set --name vet-gateway-TUSUFIJO --resource-group rg-veterinaria-s15 --settings Routes__6__DownstreamHostAndPorts__0__Host=citas-detenido.invalid
+```
+
+Prueba `GET /gateway/citas` con token, comprueba que las mascotas siguen respondiendo y deshaz
+el cambio:
+
+```powershell
+az webapp config appsettings delete --name vet-gateway-TUSUFIJO --resource-group rg-veterinaria-s15 --setting-names Routes__6__DownstreamHostAndPorts__0__Host
+```
+
+Explica en el video que así se simula la caída del microservicio.
+
+## 5. Eliminar los recursos (después de la calificación)
+
+Esto borra definitivamente las tres aplicaciones y la base de datos:
+
+```powershell
+az group delete --name rg-veterinaria-s15
+```
